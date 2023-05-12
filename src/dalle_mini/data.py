@@ -302,9 +302,9 @@ class Dataset:
 
     def dataloader(self, split, batch_size, epoch=None):
         def _dataloader_datasets_non_streaming(
-            dataset: Dataset,
-            rng: jax.random.PRNGKey = None,
-        ):
+                dataset: Dataset,
+                rng: jax.random.PRNGKey = None,
+            ):
             """
             Returns batches of size `batch_size` from truncated `dataset`, sharded over all local devices.
             Shuffle batches if rng is set.
@@ -323,8 +323,7 @@ class Dataset:
 
             for idx in batch_idx:
                 batch = dataset[idx]
-                batch = {k: jnp.array(v) for k, v in batch.items()}
-                yield batch
+                yield {k: jnp.array(v) for k, v in batch.items()}
 
         def _dataloader_datasets_streaming(
             dataset: Dataset,
@@ -361,10 +360,9 @@ class Dataset:
 
         if self.streaming:
             return _dataloader_datasets_streaming(ds, epoch)
-        else:
-            if split == "train":
-                self.rng_dataset, input_rng = jax.random.split(self.rng_dataset)
-            return _dataloader_datasets_non_streaming(ds, input_rng)
+        if split == "train":
+            self.rng_dataset, input_rng = jax.random.split(self.rng_dataset)
+        return _dataloader_datasets_non_streaming(ds, input_rng)
 
     @property
     def length(self):
@@ -422,9 +420,7 @@ def filter_function(
         return False
     if max_clip_score is not None and example[clip_score_column] > max_clip_score:
         return False
-    if filter_column is not None and example[filter_column] != filter_value:
-        return False
-    return True
+    return filter_column is None or example[filter_column] == filter_value
 
 
 def preprocess_function(

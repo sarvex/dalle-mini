@@ -32,7 +32,7 @@ class HashtagProcessor:
         self._word_cost = {
             str(k): math.log(float(i + 1)) for i, k in enumerate(self._word_cost)
         }
-        self._max_word = max(len(x) for x in self._word_cost.keys())
+        self._max_word = max(len(x) for x in self._word_cost)
         self._SPLIT_RE = re.compile("[^a-zA-Z0-9']+")
 
     def __call__(self, s):
@@ -64,16 +64,18 @@ class HashtagProcessor:
             c, k = best_match(i)
             assert c == cost[i]
             newToken = True
-            if not s[i - k : i] == "'":  # ignore a lone apostrophe
-                if len(out) > 0:
-                    # re-attach split 's and split digits
-                    if out[-1] == "'s" or (
-                        s[i - 1].isdigit() and out[-1][0].isdigit()
-                    ):  # digit followed by digit
-                        out[-1] = (
-                            s[i - k : i] + out[-1]
-                        )  # combine current token with previous token
-                        newToken = False
+            if (
+                s[i - k : i] != "'"
+                and out
+                and (
+                    out[-1] == "'s"
+                    or (s[i - 1].isdigit() and out[-1][0].isdigit())
+                )
+            ):
+                out[-1] = (
+                    s[i - k : i] + out[-1]
+                )  # combine current token with previous token
+                newToken = False
 
             if newToken:
                 out.append(s[i - k : i])

@@ -193,11 +193,13 @@ def power_iteration(
         )
 
     # Figure out how to use step as seed for random.
+
+    # Figure out how to use step as seed for random.
     v_0 = (
         np.random.RandomState(1729).uniform(-1.0, 1.0, matrix_size).astype(matrix.dtype)
     )
 
-    init_state = tuple([0, v_0, jnp.zeros([], dtype=matrix.dtype), v_0, True])
+    init_state = 0, v_0, jnp.zeros([], dtype=matrix.dtype), v_0, True
     _, v_out, s_out, _, _ = lax.while_loop(_iter_condition, _iter_body, init_state)
     v_out = v_out / jnp.linalg.norm(v_out)
     return v_out, s_out
@@ -309,7 +311,7 @@ def matrix_inverse_pth_root(
         new_mat_m_0 = damped_matrix * z
         new_error = jnp.max(jnp.abs(new_mat_m_0 - identity))
         new_mat_h_0 = identity * jnp.power(z, 1.0 / p)
-        init_state = tuple([0, new_mat_m_0, new_mat_h_0, new_mat_h_0, new_error, True])
+        init_state = 0, new_mat_m_0, new_mat_h_0, new_mat_h_0, new_error, True
         _, mat_m, mat_h, old_mat_h, error, convergence = lax.while_loop(
             _iter_condition, _iter_body, init_state
         )
@@ -420,12 +422,15 @@ def make_sliced_padding(
 
     blocks = []
     for i in range(starting_block, num_blocks):
-        blocks.append(
-            jnp.zeros(
-                shape=(symmetric_block_size, symmetric_block_size * i), dtype=dtype
+        blocks.extend(
+            (
+                jnp.zeros(
+                    shape=(symmetric_block_size, symmetric_block_size * i),
+                    dtype=dtype,
+                ),
+                jnp.eye(symmetric_block_size, dtype=dtype),
             )
         )
-        blocks.append(jnp.eye(symmetric_block_size, dtype=dtype))
     return jnp.concatenate(blocks, axis=-1)
 
 
@@ -658,7 +663,7 @@ class Preconditioner:
 def _convert_to_parameter_stats(global_stats, local_stat):
     """Creates parameter stats from sharded stats."""
     index_start = int(local_stat.index_start)
-    index_end = int(len(local_stat.sizes)) + index_start
+    index_end = len(local_stat.sizes) + index_start
     statistics = global_stats.statistics[index_start:index_end, :, :]
     preconditioners = global_stats.preconditioners[index_start:index_end, :, :]
     new_statistics = []
@@ -694,11 +699,8 @@ def _add_error_into_local_stats(local_stats, errors, inverse_failure_threshold):
     for local_stat in local_stats:
         if local_stat.sizes:
             index_start = int(local_stat.index_start)
-            index_end = int(len(local_stat.sizes)) + index_start
+            index_end = len(local_stat.sizes) + index_start
             per_stat_error = errors[index_start:index_end]
-        else:
-            per_stat_error = jnp.array(0, jnp.float32)
-        if local_stat.sizes:
             per_stat_error = jnp.where(
                 jnp.logical_and(
                     per_stat_error > 0.0, per_stat_error != inverse_failure_threshold
@@ -706,6 +708,8 @@ def _add_error_into_local_stats(local_stats, errors, inverse_failure_threshold):
                 per_stat_error,
                 local_stat.training_metrics.inverse_pth_root_errors,
             )
+        else:
+            per_stat_error = jnp.array(0, jnp.float32)
         new_local_stats.append(
             LocalShardedParameterStats(
                 local_stat.diagonal_statistics,
@@ -734,8 +738,10 @@ def unbatch(batched_values):
         v_array = jnp.squeeze(v_array)
         # b2 = batches (number of preconditioner computation) per core.
         if b2 > 1:
-            for v in jnp.split(v_array, indices_or_sections=b2, axis=0):
-                results.append(jnp.squeeze(v))
+            results.extend(
+                jnp.squeeze(v)
+                for v in jnp.split(v_array, indices_or_sections=b2, axis=0)
+            )
         else:
             results.append(v_array)
     return results

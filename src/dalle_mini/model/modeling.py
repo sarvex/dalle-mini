@@ -138,8 +138,7 @@ class RMSNorm(nn.Module):
 
     def _compute_rms_sq(self, x, axes):
         x = jnp.asarray(x, jnp.promote_types(jnp.float32, jnp.result_type(x)))
-        rms_sq = jnp.mean(jax.lax.square(x), axes)
-        return rms_sq
+        return jnp.mean(jax.lax.square(x), axes)
 
     def _normalize(
         self,
@@ -1351,9 +1350,7 @@ class FlaxBartForConditionalGenerationModule(FlaxBartForConditionalGenerationMod
             lm_logits = self.lm_head(hidden_states)
 
         if not return_dict:
-            output = (lm_logits,) + outputs[1:]
-            return output
-
+            return (lm_logits,) + outputs[1:]
         return FlaxSeq2SeqLMOutput(
             logits=lm_logits,
             decoder_hidden_states=outputs.decoder_hidden_states,
@@ -1543,11 +1540,12 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
             outputs = (lm_logits,) + decoder_outputs[1:]
 
         # add updated cache to model output
-        if past_key_values is not None and return_dict:
-            outputs["past_key_values"] = unfreeze(past["cache"])
-            return outputs
-        elif past_key_values is not None and not return_dict:
-            outputs = outputs[:1] + (unfreeze(past["cache"]),) + outputs[1:]
+        if past_key_values is not None:
+            if return_dict:
+                outputs["past_key_values"] = unfreeze(past["cache"])
+                return outputs
+            elif not return_dict:
+                outputs = outputs[:1] + (unfreeze(past["cache"]),) + outputs[1:]
 
         return outputs
 

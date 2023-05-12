@@ -131,14 +131,14 @@ class ModelArguments:
             ), "Restoring state only available with W&B artifact reference"
 
     def get_metadata(self):
-        if self.model_name_or_path is not None and ":" in self.model_name_or_path:
-            if jax.process_index() == 0:
-                artifact = wandb.run.use_artifact(self.model_name_or_path)
-            else:
-                artifact = wandb.Api().artifact(self.model_name_or_path)
-            return artifact.metadata
-        else:
-            return dict()
+        if self.model_name_or_path is None or ":" not in self.model_name_or_path:
+            return {}
+        artifact = (
+            wandb.run.use_artifact(self.model_name_or_path)
+            if jax.process_index() == 0
+            else wandb.Api().artifact(self.model_name_or_path)
+        )
+        return artifact.metadata
 
     def get_opt_state(self):
         with tempfile.TemporaryDirectory() as tmp_dir:  # avoid multiple artifact copies
@@ -550,7 +550,7 @@ class TrainingArguments:
         ], f"Shard shampoo across {self.shard_shampoo_across} not supported."
         assert (
             self.mp_devices > 0
-        ), f"Number of devices for model parallelism must be > 0"
+        ), "Number of devices for model parallelism must be > 0"
         assert (
             jax.device_count() % self.mp_devices == 0
         ), f"Number of available devices ({jax.device_count()} must be divisible by number of devices used for model parallelism ({self.mp_devices})."
@@ -579,7 +579,7 @@ def unsplit_params(data):
     flat = {}
     for k in ["standard", "scanned_encoder", "scanned_decoder"]:
         if k in data:
-            flat.update(traverse_util.flatten_dict(unfreeze(data[k])))
+            flat |= traverse_util.flatten_dict(unfreeze(data[k]))
     return freeze(traverse_util.unflatten_dict(flat))
 
 
